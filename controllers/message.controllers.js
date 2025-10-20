@@ -83,14 +83,12 @@ const Notification = db.Notification;
 exports.sendMessageClient = async (req, res) => {
 	try {
 		const { sender_id, receiver_id, type, content } = req.body;
-
-		// Get the doctor (receiver)
+		//get the user id using the receiver_id which is doctor_id
 		const doctor = await User.findByPk(receiver_id);
 		if (!doctor) {
 			return res.status(404).json({ error: "Doctor not found" });
 		}
-
-		// Use the doctor's user_id as receiver_id
+		//set receiver_id to the user_id of the doctor
 		const receiverUserId = doctor.user_id;
 
 		// Create message
@@ -120,8 +118,6 @@ exports.sendMessageClient = async (req, res) => {
 exports.sendMessageDoctor = async (req, res) => {
 	try {
 		const { sender_id, receiver_id, type, content } = req.body;
-
-		// Create message
 		const msg = await Message.create({ sender_id, receiver_id, type, content });
 
 		// ✅ Create notification for the receiver (client)
