@@ -82,6 +82,7 @@ const Notification = db.Notification;
 const Admin = db.Admin;
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+const { Op } = require("sequelize");
 
 exports.sendMessageClient = async (req, res) => {
 	try {
@@ -288,6 +289,133 @@ exports.getConversationAdmin = async (req, res) => {
 // 	}
 
 // };
+
+// exports.getUsersWithConversations = async (req, res) => {
+// 	try {
+// 		// 🔐 Decode the JWT to get the logged-in admin user
+// 		const token = req.headers.authorization?.split(" ")[1];
+// 		if (!token) {
+// 			return res.status(401).json({ message: "No token provided." });
+// 		}
+
+// 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+// 		const adminId = decoded.user_id;
+
+// 		// 📨 Find all messages where admin is sender or receiver
+// 		const messages = await Message.findAll({
+// 			where: {
+// 				[Op.or]: [{ sender_id: adminId }, { receiver_id: adminId }],
+// 			},
+// 			attributes: ["sender_id", "receiver_id", "content", "createdAt"],
+// 			order: [["createdAt", "DESC"]],
+// 		});
+
+// 		// 🔍 Extract all unique user IDs that had a conversation with the admin
+// 		const userIds = [
+// 			...new Set(
+// 				messages.map((msg) =>
+// 					msg.sender_id === adminId ? msg.receiver_id : msg.sender_id
+// 				)
+// 			),
+// 		];
+
+// 		if (userIds.length === 0) {
+// 			return res.json([]);
+// 		}
+
+// 		// 🧑‍💻 Fetch user details
+// 		const users = await User.findAll({
+// 			where: { user_id: { [Op.in]: userIds } },
+// 			attributes: ["user_id", "email", "role"],
+// 		});
+
+// 		// 🧩 Combine with latest message info
+// 		const convoList = users.map((user) => {
+// 			const lastMsg = messages.find(
+// 				(msg) =>
+// 					msg.sender_id === user.user_id || msg.receiver_id === user.user_id
+// 			);
+
+// 			return {
+// 				user_id: user.user_id,
+// 				email: user.email,
+// 				role: user.role,
+// 				last_message: lastMsg ? lastMsg.content : null,
+// 				last_time: lastMsg ? lastMsg.createdAt : null,
+// 			};
+// 		});
+
+// 		res.json(convoList);
+// 	} catch (err) {
+// 		console.error("Error fetching user conversations:", err);
+// 		res.status(500).json({ error: err.message });
+// 	}
+// };
+
+exports.getUsersWithConversations = async (req, res) => {
+	try {
+		// 🔐 Decode JWT token to get logged-in admin
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token) return res.status(401).json({ message: "No token provided." });
+
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const adminId = decoded.user_id;
+
+		// 📨 Fetch all messages where admin is sender or receiver
+		const messages = await Message.findAll({
+			where: { [Op.or]: [{ sender_id: adminId }, { receiver_id: adminId }] },
+			attributes: [
+				"message_id",
+				"sender_id",
+				"receiver_id",
+				"content",
+				"createdAt",
+			],
+			order: [["createdAt", "DESC"]],
+		});
+
+		// 🔍 Extract all unique user IDs that had a conversation with the admin
+		const userIds = [
+			...new Set(
+				messages.map((msg) =>
+					msg.sender_id === adminId ? msg.receiver_id : msg.sender_id
+				)
+			),
+		];
+
+		if (userIds.length === 0) return res.json([]);
+
+		// 🧑‍💻 Fetch user details
+		const users = await User.findAll({
+			where: { user_id: { [Op.in]: userIds } },
+			attributes: ["user_id", "email", "role", "profile_picture"],
+		});
+
+		// 🧩 Combine with latest message info
+		const convoList = users.map((user) => {
+			const lastMsg = messages.find(
+				(msg) =>
+					msg.sender_id === user.user_id || msg.receiver_id === user.user_id
+			);
+
+			return {
+				conversation_user_id: user.user_id, // user chatting with admin
+				sender_id: lastMsg ? lastMsg.sender_id : null,
+				receiver_id: lastMsg ? lastMsg.receiver_id : null,
+				email: user.email,
+				role: user.role,
+				profile_picture: user.profile_picture,
+				last_message: lastMsg ? lastMsg.content : null,
+				last_time: lastMsg ? lastMsg.createdAt : null,
+			};
+		});
+
+		res.json(convoList);
+	} catch (err) {
+		console.error("Error fetching user conversations:", err);
+		res.status(500).json({ error: err.message });
+	}
+};
 
 exports.markAsRead = async (req, res) => {
 	try {

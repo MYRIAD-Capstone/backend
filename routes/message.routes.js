@@ -8,5 +8,6 @@ router.post("/admin", controller.sendMessageToAdmin);
 router.get("/:user1/:user2", controller.getConversation);
 router.get("/admin-convo", controller.getConversationAdmin);
 router.put("/read/:messageId", controller.markAsRead);
+router.get("/admin", controller.getUsersWithConversations);
 
 module.exports = router;
