@@ -17,17 +17,22 @@ exports.getAllAppointments = async (req, res) => {
 		}
 		// Verify and decode token
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
-		// Get userId from decoded token
-		const userId = decoded.user_id; // depends on what you put inside the JWT payload
-		// Fetch only appointments for this user
-		console.log("Decoded Token:", decoded);
+
+		const userId = decoded.user_id;
+
 		const appointments = await Appointment.findAll({
 			where: { user_id: userId },
 			include: [
 				{
 					model: Doctor,
 					as: "doctor",
-					attributes: ["doctor_id", "first_name", "middle_name", "last_name"],
+					attributes: [
+						"doctor_id",
+						"first_name",
+						"middle_name",
+						"last_name",
+						"user_id",
+					],
 				},
 			],
 			order: [
@@ -47,22 +52,24 @@ exports.getDoctorAppointments = async (req, res) => {
 	try {
 		const token = req.headers["authorization"]?.split(" ")[1];
 		if (!token) return res.status(401).json({ message: "No token provided" });
-
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 		const userId = decoded.user_id;
-
-		// Find doctor linked to this user
 		const doctor = await db.Doctor.findOne({ where: { user_id: userId } });
 		if (!doctor)
 			return res.status(403).json({ message: "No doctor found for this user" });
-
 		const appointments = await db.Appointment.findAll({
 			where: { doctor_id: doctor.doctor_id },
 			include: [
 				{
 					model: db.Doctor,
 					as: "doctor",
-					attributes: ["doctor_id", "first_name", "middle_name", "last_name"],
+					attributes: [
+						"doctor_id",
+						"first_name",
+						"middle_name",
+						"last_name",
+						"user_id",
+					],
 				},
 				{
 					model: db.User,
@@ -88,7 +95,57 @@ exports.getDoctorAppointments = async (req, res) => {
 				["time", "ASC"],
 			],
 		});
+		res.status(200).json(appointments);
+	} catch (error) {
+		console.error("Error fetching doctor appointments:", error);
+		res.status(500).json({ message: "Something went wrong.", error });
+	}
+};
 
+exports.getClientAppointments = async (req, res) => {
+	try {
+		const token = req.headers["authorization"]?.split(" ")[1];
+		if (!token) return res.status(401).json({ message: "No token provided" });
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const userId = decoded.user_id;
+		const appointments = await db.Appointment.findAll({
+			where: { user_id: userId },
+			include: [
+				{
+					model: db.Doctor,
+					as: "doctor",
+					attributes: [
+						"doctor_id",
+						"first_name",
+						"middle_name",
+						"last_name",
+						"user_id",
+					],
+				},
+				{
+					model: db.User,
+					as: "user",
+					attributes: ["user_id", "email"],
+					include: [
+						{
+							model: db.Client,
+							as: "clients",
+							attributes: [
+								"client_id",
+								"first_name",
+								"middle_name",
+								"last_name",
+								"contact_number",
+							],
+						},
+					],
+				},
+			],
+			order: [
+				["date", "ASC"],
+				["time", "ASC"],
+			],
+		});
 		res.status(200).json(appointments);
 	} catch (error) {
 		console.error("Error fetching doctor appointments:", error);
