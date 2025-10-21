@@ -217,7 +217,7 @@ exports.verifyToken = async (req, res) => {
 			"home",
 			"events",
 			"articles",
-			"consultation",
+			"messages",
 			// "patients",
 			"doctors",
 			"clients",

@@ -45,6 +45,10 @@ module.exports = (sequelize, Sequelize) => {
 				allowNull: false,
 				defaultValue: 0,
 			},
+			link: {
+				type: Sequelize.STRING,
+				allowNull: true,
+			},
 		},
 		{
 			timestamps: true,

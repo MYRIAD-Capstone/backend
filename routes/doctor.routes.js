@@ -8,4 +8,5 @@ router.post("/availability", controller.createAvailability);
 router.get("/all", controller.getAllDoctors);
 router.get("/doctor-by-id", controller.getDoctorById);
 router.put("/profile", controller.updateDoctorProfile);
+router.get("/available-times", controller.getAvailableTimeByDoctor);
 module.exports = router;

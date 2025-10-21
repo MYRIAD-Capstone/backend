@@ -4,22 +4,21 @@ const { Sequelize } = require("sequelize");
 const db = require("../models");
 const Appointment = db.Appointment;
 const Doctor = db.Doctor;
-const User = db.User;
-const Client = db.Client;
 const jwt = require("jsonwebtoken");
 
 exports.getAllAppointments = async (req, res) => {
 	try {
-		// Extract token from headers
+		// ✅ Extract token
 		const token = req.headers["authorization"]?.split(" ")[1];
 		if (!token) {
 			return res.status(401).json({ message: "No token provided" });
 		}
-		// Verify and decode token
-		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+		// ✅ Decode token
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 		const userId = decoded.user_id;
 
+		// ✅ Fetch appointments (with doctor & availability)
 		const appointments = await Appointment.findAll({
 			where: { user_id: userId },
 			include: [
@@ -34,29 +33,48 @@ exports.getAllAppointments = async (req, res) => {
 						"user_id",
 					],
 				},
+				{
+					model: DoctorAvailability,
+					as: "availability", // ✅ use alias if defined in associations
+					attributes: [
+						"availability_id",
+						"date",
+						"start_time",
+						"end_time",
+						"status",
+					],
+				},
 			],
 			order: [
 				["date", "ASC"],
-				["time", "ASC"],
+				[DoctorAvailability, "start_time", "ASC"], // ✅ order by actual slot time
 			],
 		});
 
 		res.status(200).json(appointments);
 	} catch (error) {
 		console.error("Error fetching user appointments:", error);
-		res.status(500).json({ message: "Something went wrong.", error });
+		res.status(500).json({
+			message: "Something went wrong while fetching appointments.",
+			error: error.message,
+		});
 	}
 };
 
+// ✅ getDoctorAppointments
 exports.getDoctorAppointments = async (req, res) => {
 	try {
 		const token = req.headers["authorization"]?.split(" ")[1];
 		if (!token) return res.status(401).json({ message: "No token provided" });
+
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 		const userId = decoded.user_id;
+
+		// Find the doctor linked to this user
 		const doctor = await db.Doctor.findOne({ where: { user_id: userId } });
 		if (!doctor)
 			return res.status(403).json({ message: "No doctor found for this user" });
+
 		const appointments = await db.Appointment.findAll({
 			where: { doctor_id: doctor.doctor_id },
 			include: [
@@ -73,12 +91,12 @@ exports.getDoctorAppointments = async (req, res) => {
 				},
 				{
 					model: db.User,
-					as: "user", // Appointment → User
+					as: "user",
 					attributes: ["user_id", "email"],
 					include: [
 						{
 							model: db.Client,
-							as: "clients", // MUST match the alias in db.js
+							as: "clients",
 							attributes: [
 								"client_id",
 								"first_name",
@@ -89,12 +107,24 @@ exports.getDoctorAppointments = async (req, res) => {
 						},
 					],
 				},
+				// ✅ Include DoctorAvailability (so we can access start_time / end_time)
+				{
+					model: db.DoctorAvailability,
+					as: "availability",
+					attributes: ["availability_id", "date", "start_time", "end_time"],
+				},
 			],
 			order: [
 				["date", "ASC"],
-				["time", "ASC"],
+				// sort by availability start_time instead of appointment.time
+				[
+					{ model: db.DoctorAvailability, as: "availability" },
+					"start_time",
+					"ASC",
+				],
 			],
 		});
+
 		res.status(200).json(appointments);
 	} catch (error) {
 		console.error("Error fetching doctor appointments:", error);
@@ -102,12 +132,15 @@ exports.getDoctorAppointments = async (req, res) => {
 	}
 };
 
+// ✅ getClientAppointments
 exports.getClientAppointments = async (req, res) => {
 	try {
 		const token = req.headers["authorization"]?.split(" ")[1];
 		if (!token) return res.status(401).json({ message: "No token provided" });
+
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 		const userId = decoded.user_id;
+
 		const appointments = await db.Appointment.findAll({
 			where: { user_id: userId },
 			include: [
@@ -140,36 +173,292 @@ exports.getClientAppointments = async (req, res) => {
 						},
 					],
 				},
+				// ✅ Include DoctorAvailability (for availability time info)
+				{
+					model: db.DoctorAvailability,
+					as: "availability",
+					attributes: ["availability_id", "date", "start_time", "end_time"],
+				},
 			],
 			order: [
 				["date", "ASC"],
-				["time", "ASC"],
+				[
+					{ model: db.DoctorAvailability, as: "availability" },
+					"start_time",
+					"ASC",
+				],
 			],
 		});
+
 		res.status(200).json(appointments);
 	} catch (error) {
-		console.error("Error fetching doctor appointments:", error);
+		console.error("Error fetching client appointments:", error);
 		res.status(500).json({ message: "Something went wrong.", error });
 	}
 };
 
+// ✅ Cancel Appointment
+exports.cancelAppointment = async (req, res) => {
+	try {
+		const token = req.headers["authorization"]?.split(" ")[1];
+		if (!token) return res.status(401).json({ message: "No token provided" });
+
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const userId = decoded.user_id;
+
+		const { id } = req.params;
+
+		// Find the appointment
+		const appointment = await db.Appointment.findOne({
+			where: { appointment_id: id, user_id: userId },
+		});
+
+		if (!appointment) {
+			return res.status(404).json({ message: "Appointment not found" });
+		}
+
+		// Check if already past date
+		const today = new Date();
+		const appointmentDate = new Date(appointment.date);
+		if (appointmentDate < today) {
+			return res
+				.status(400)
+				.json({ message: "Cannot cancel past appointments" });
+		}
+
+		// Update status to 'Cancelled'
+		await appointment.update({ status: "Cancelled" });
+
+		res.status(200).json({ message: "Appointment cancelled successfully" });
+	} catch (error) {
+		console.error("Error cancelling appointment:", error);
+		res
+			.status(500)
+			.json({ message: "Failed to cancel appointment", error: error.message });
+	}
+};
+
+// ✅ Mark Appointment as Ongoing
+exports.ongoingAppointment = async (req, res) => {
+	try {
+		const token = req.headers["authorization"]?.split(" ")[1];
+		if (!token) return res.status(401).json({ message: "No token provided" });
+
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const userId = decoded.user_id;
+
+		const { id } = req.params;
+
+		// Find the appointment
+		const appointment = await db.Appointment.findOne({
+			where: { appointment_id: id, user_id: userId },
+		});
+
+		if (!appointment) {
+			return res.status(404).json({ message: "Appointment not found" });
+		}
+
+		// Check if the appointment is already ongoing or finished
+		if (appointment.status === "Ongoing") {
+			return res
+				.status(400)
+				.json({ message: "Appointment is already ongoing" });
+		}
+		if (appointment.status === "Cancelled") {
+			return res.status(400).json({
+				message: "Cancelled appointments cannot be marked as ongoing",
+			});
+		}
+
+		// Prevent starting past or future appointments outside the time window
+		const now = new Date();
+		const appointmentDate = new Date(appointment.date);
+		const startTime = new Date(`${appointment.date}T${appointment.start_time}`);
+		const endTime = new Date(`${appointment.date}T${appointment.end_time}`);
+
+		if (now < startTime) {
+			return res
+				.status(400)
+				.json({ message: "Appointment has not started yet" });
+		}
+		if (now > endTime) {
+			return res
+				.status(400)
+				.json({ message: "Appointment time has already passed" });
+		}
+
+		// Update status to 'Ongoing'
+		await appointment.update({ status: "Ongoing" });
+
+		res.status(200).json({ message: "Appointment marked as ongoing" });
+	} catch (error) {
+		console.error("Error updating appointment to ongoing:", error);
+		res.status(500).json({
+			message: "Failed to mark appointment as ongoing",
+			error: error.message,
+		});
+	}
+};
+
+exports.completeAppointment = async (req, res) => {
+	try {
+		const token = req.headers["authorization"]?.split(" ")[1];
+		if (!token) return res.status(401).json({ message: "No token provided" });
+
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const userId = decoded.user_id;
+		const { id } = req.params;
+
+		const appointment = await Appointment.findOne({
+			where: { appointment_id: id, user_id: userId },
+		});
+		if (!appointment)
+			return res.status(404).json({ message: "Appointment not found" });
+
+		if (appointment.status === "Completed")
+			return res
+				.status(400)
+				.json({ message: "Appointment is already completed" });
+		if (appointment.status === "Cancelled")
+			return res
+				.status(400)
+				.json({ message: "Cancelled appointments cannot be completed" });
+
+		await appointment.update({ status: "Completed" });
+		res.status(200).json({ message: "Appointment marked as completed" });
+	} catch (error) {
+		console.error("Error completing appointment:", error);
+		res.status(500).json({
+			message: "Failed to mark appointment as completed",
+			error: error.message,
+		});
+	}
+};
+
+// exports.getDoctorAppointments = async (req, res) => {
+// 	try {
+// 		const token = req.headers["authorization"]?.split(" ")[1];
+// 		if (!token) return res.status(401).json({ message: "No token provided" });
+// 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+// 		const userId = decoded.user_id;
+// 		const doctor = await db.Doctor.findOne({ where: { user_id: userId } });
+// 		if (!doctor)
+// 			return res.status(403).json({ message: "No doctor found for this user" });
+// 		const appointments = await db.Appointment.findAll({
+// 			where: { doctor_id: doctor.doctor_id },
+// 			include: [
+// 				{
+// 					model: db.Doctor,
+// 					as: "doctor",
+// 					attributes: [
+// 						"doctor_id",
+// 						"first_name",
+// 						"middle_name",
+// 						"last_name",
+// 						"user_id",
+// 					],
+// 				},
+// 				{
+// 					model: db.User,
+// 					as: "user", // Appointment → User
+// 					attributes: ["user_id", "email"],
+// 					include: [
+// 						{
+// 							model: db.Client,
+// 							as: "clients", // MUST match the alias in db.js
+// 							attributes: [
+// 								"client_id",
+// 								"first_name",
+// 								"middle_name",
+// 								"last_name",
+// 								"contact_number",
+// 							],
+// 						},
+// 					],
+// 				},
+// 			],
+// 			order: [
+// 				["date", "ASC"],
+// 				["time", "ASC"],
+// 			],
+// 		});
+// 		res.status(200).json(appointments);
+// 	} catch (error) {
+// 		console.error("Error fetching doctor appointments:", error);
+// 		res.status(500).json({ message: "Something went wrong.", error });
+// 	}
+// };
+
+// exports.getClientAppointments = async (req, res) => {
+// 	try {
+// 		const token = req.headers["authorization"]?.split(" ")[1];
+// 		if (!token) return res.status(401).json({ message: "No token provided" });
+// 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+// 		const userId = decoded.user_id;
+// 		const appointments = await db.Appointment.findAll({
+// 			where: { user_id: userId },
+// 			include: [
+// 				{
+// 					model: db.Doctor,
+// 					as: "doctor",
+// 					attributes: [
+// 						"doctor_id",
+// 						"first_name",
+// 						"middle_name",
+// 						"last_name",
+// 						"user_id",
+// 					],
+// 				},
+// 				{
+// 					model: db.User,
+// 					as: "user",
+// 					attributes: ["user_id", "email"],
+// 					include: [
+// 						{
+// 							model: db.Client,
+// 							as: "clients",
+// 							attributes: [
+// 								"client_id",
+// 								"first_name",
+// 								"middle_name",
+// 								"last_name",
+// 								"contact_number",
+// 							],
+// 						},
+// 					],
+// 				},
+// 			],
+// 			order: [
+// 				["date", "ASC"],
+// 				["time", "ASC"],
+// 			],
+// 		});
+// 		res.status(200).json(appointments);
+// 	} catch (error) {
+// 		console.error("Error fetching doctor appointments:", error);
+// 		res.status(500).json({ message: "Something went wrong.", error });
+// 	}
+// };
+
 exports.createAppointment = async (req, res) => {
 	try {
-		const { doctor_id, user_id, date, timeSlot, remarks } = req.body;
+		const { doctor_id, user_id, date, timeSlot, remarks, availability_id } =
+			req.body;
 
-		if (!doctor_id || !user_id || !date || !timeSlot) {
+		if (!doctor_id || !user_id || !date) {
 			return res.status(400).json({ message: "Required fields are missing" });
 		}
 
 		// Convert timeSlot string to start time (example: "9:00 AM - 10:00 AM")
-		const startTime = timeSlot.split(" - ")[0];
+		// const startTime = timeSlot.split(" - ")[0];
 		const appointment = await Appointment.create({
 			doctor_id,
 			user_id,
 			date,
-			time: startTime,
+			// time: startTime,
 			remarks,
 			status: "Pending",
+			availability_id,
 		});
 
 		res.status(201).json({

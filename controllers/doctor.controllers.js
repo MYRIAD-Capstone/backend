@@ -10,16 +10,79 @@ const Message = db.Message;
 const User = db.User;
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+require("dotenv").config();
+
+exports.getAvailableTimeByDoctor = async (req, res) => {
+	try {
+		const { doctor_id, date } = req.query;
+
+		// Basic validation
+		if (!doctor_id || !date) {
+			return res
+				.status(400)
+				.json({ message: "Both doctor_id and date are required." });
+		}
+
+		// Fetch all available time slots for the doctor on that date
+		const slots = await DoctorAvailability.findAll({
+			where: { doctor_id, date, status: "available" },
+			order: [["start_time", "ASC"]],
+			attributes: [
+				"availability_id",
+				"start_time",
+				"end_time",
+				"status",
+				"date",
+			],
+		});
+
+		if (!slots || slots.length === 0) {
+			return res.status(404).json({
+				message:
+					"No available time slots found for this doctor on the given date.",
+			});
+		}
+
+		// Format each slot into readable strings
+		const formattedSlots = slots.map((slot) => ({
+			availability_id: slot.availability_id,
+			start_time: slot.start_time,
+			end_time: slot.end_time,
+			time_slot: `${slot.start_time.slice(0, 5)} - ${slot.end_time.slice(
+				0,
+				5
+			)}`,
+			date: slot.date,
+			status: slot.status,
+		}));
+
+		return res.status(200).json({ slots: formattedSlots });
+	} catch (error) {
+		console.error("Error fetching doctor availability:", error);
+		return res
+			.status(500)
+			.json({ message: "Server error", error: error.message });
+	}
+};
 
 exports.createAvailability = async (req, res) => {
 	try {
-		const { doctor_id, date, start_time, end_time, status } = req.body;
+		const { date, start_time, end_time, status } = req.body;
 		// Basic validation
-		if (!doctor_id || !date || !start_time || !end_time) {
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token)
+			return res.status(401).json({ message: "Authorization token missing." });
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+		//get doctor id from Doctor table using user_id from decoded token
+		const doctor = await Doctor.findOne({
+			where: { user_id: decoded.user_id },
+		});
+		if (!doctor || !date || !start_time || !end_time) {
 			return res.status(400).json({ message: "Missing required fields" });
 		}
 		const availability = await DoctorAvailability.create({
-			doctor_id,
+			doctor_id: doctor.doctor_id,
 			date,
 			start_time,
 			end_time,
@@ -39,20 +102,27 @@ exports.createAvailability = async (req, res) => {
 
 exports.getAvailabilitiesByDoctor = async (req, res) => {
 	try {
-		const { doctorId, date } = req.query; // 👈 from query
-		console.log(
-			"Fetching availability for doctorId:",
-			doctorId,
-			"on date:",
-			date
-		);
-		if (!doctorId || !date) {
+		const { date } = req.query;
+
+		// 1️⃣ Get token from headers
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token)
+			return res.status(401).json({ message: "Authorization token missing." });
+		// 2️⃣ Decode token
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+		//get doctor id from Doctor table using user_id from decoded token
+		const doctor = await Doctor.findOne({
+			where: { user_id: decoded.user_id },
+		});
+
+		if (!doctor || !date) {
 			return res
 				.status(400)
-				.json({ message: "doctorId and date are required" });
+				.json({ message: "Doctor not found or date not provided." });
 		}
 		const slots = await DoctorAvailability.findAll({
-			where: { doctor_id: doctorId, date },
+			where: { doctor_id: doctor.doctor_id, date },
 			order: [["start_time", "ASC"]],
 		});
 

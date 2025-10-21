@@ -8,4 +8,8 @@ router.post("/", appointmentController.createAppointment);
 router.get("/doctor", appointmentController.getDoctorAppointments);
 router.get("/client", appointmentController.getClientAppointments);
 router.get("/stats/:year", appointmentController.getMonthlyAppointments);
+router.put("/:id/cancel", appointmentController.cancelAppointment);
+router.put("/:id/ongoing", appointmentController.ongoingAppointment);
+router.put("/:id/complete", appointmentController.completeAppointment);
+
 module.exports = router;

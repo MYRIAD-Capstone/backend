@@ -32,9 +32,13 @@ module.exports = (sequelize, Sequelize) => {
 				type: Sequelize.DATEONLY, // Only the date part
 				allowNull: false,
 			},
-			time: {
-				type: Sequelize.TIME, // Only the time part
-				allowNull: false,
+			availability_id: {
+				type: Sequelize.INTEGER,
+				allowNull: true,
+				references: {
+					model: "doctor_availability",
+					key: "availability_id",
+				},
 			},
 			remarks: {
 				type: Sequelize.STRING,
@@ -45,7 +49,7 @@ module.exports = (sequelize, Sequelize) => {
 				allowNull: false,
 				defaultValue: "Pending",
 				validate: {
-					isIn: [["Pending", "Approved", "Cancelled"]],
+					isIn: [["Pending", "Ongoing", "Cancelled", "Completed"]],
 				},
 			},
 		},

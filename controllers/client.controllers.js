@@ -1,7 +1,10 @@
 const db = require("../models");
 const Client = db.Client;
 const User = db.User;
-const jwt = require("jsonwebtoken");
+const Appointment = db.Appointment;
+const Doctor = db.Doctor;
+const DoctorAvailability = db.DoctorAvailability;
+const { format } = require("date-fns"); // npm install date-fns
 require("dotenv").config();
 
 exports.getAllClients = async (req, res) => {
@@ -12,30 +15,36 @@ exports.getAllClients = async (req, res) => {
 					model: User,
 					as: "user",
 					attributes: ["user_id", "email", "status", "role"],
+					include: [
+						{
+							model: Appointment,
+							as: "appointments",
+							include: [
+								{
+									model: Doctor,
+									as: "doctor",
+									attributes: ["doctor_id", "first_name", "last_name"],
+								},
+								{
+									model: DoctorAvailability,
+									as: "availability",
+									attributes: [
+										"availability_id",
+										"start_time",
+										"end_time",
+										"date",
+										"status",
+									],
+								},
+							],
+						},
+					],
 				},
 			],
 			order: [["client_id", "ASC"]],
 		});
 
-		// Format response
-		const formatted = clients.map((c) => ({
-			id: c.client_id,
-			name: `${c.first_name} ${c.middle_name ? c.middle_name + " " : ""}${
-				c.last_name
-			}`,
-			email: c.user?.email || "N/A",
-			contact: c.contact_number,
-			status:
-				c.status === "enabled"
-					? "Active"
-					: c.status === "disabled"
-					? "Inactive"
-					: "Pending",
-			role: c.user?.role || "client",
-			createdAt: c.createdAt,
-		}));
-
-		res.status(200).json(formatted);
+		res.status(200).json(clients);
 	} catch (error) {
 		console.error("Error fetching clients:", error);
 		res.status(500).json({
