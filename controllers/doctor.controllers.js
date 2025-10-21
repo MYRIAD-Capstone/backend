@@ -137,44 +137,42 @@ exports.getAvailabilitiesByDoctor = async (req, res) => {
 
 exports.getDoctorDashboard = async (req, res) => {
 	try {
-		// 1️⃣ Get token from headers
 		const token = req.headers.authorization?.split(" ")[1];
 		if (!token)
 			return res.status(401).json({ message: "Authorization token missing." });
 
-		// 2️⃣ Decode token
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
-		console.log("Decoded JWT:", decoded);
 
-		// 3️⃣ Compare role using bcrypt (if stored encrypted)
 		const isDoctor = await bcrypt.compare("doctor", decoded.role);
+
 		if (!isDoctor) {
 			return res.status(403).json({ message: "Access denied. Not a doctor." });
 		}
 
 		const doctorId = decoded.user_id;
 
-		// 4️⃣ Get today's date in YYYY-MM-DD format
 		const today = new Date();
-		const yyyy = today.getFullYear();
-		const mm = String(today.getMonth() + 1).padStart(2, "0"); // Month is 0-indexed
-		const dd = String(today.getDate()).padStart(2, "0");
-		const formattedDate = `${yyyy}-${mm}-${dd}`;
+		const formattedDate = today.toISOString().split("T")[0];
 
-		// 5️⃣ Fetch data in parallel
 		const [appointments, announcements, events, recentMessage, availabilities] =
 			await Promise.all([
 				Appointment.findAll({
-					where: { doctor_id: doctorId, status: "Approved" },
+					where: { doctor_id: doctorId, status: "Pending" },
 					include: [
+						{ model: User, as: "user" },
 						{
-							model: User,
-							as: "user",
+							model: DoctorAvailability,
+							as: "availability",
+							attributes: ["start_time", "end_time"],
 						},
 					],
 					order: [
 						["date", "ASC"],
-						["time", "ASC"],
+						[
+							{ model: DoctorAvailability, as: "availability" },
+							"start_time",
+							"ASC",
+						],
 					],
 					limit: 5,
 				}),
@@ -190,12 +188,7 @@ exports.getDoctorDashboard = async (req, res) => {
 				}),
 				Message.findOne({
 					where: { receiver_id: doctorId },
-					include: [
-						{
-							model: User,
-							as: "sender",
-						},
-					],
+					include: [{ model: User, as: "sender" }],
 					order: [["createdAt", "DESC"]],
 				}),
 				DoctorAvailability.findAll({
@@ -204,7 +197,6 @@ exports.getDoctorDashboard = async (req, res) => {
 				}),
 			]);
 
-		// 6️⃣ Return dashboard data
 		return res.status(200).json({
 			message: "Doctor dashboard fetched successfully",
 			appointments,
@@ -274,6 +266,7 @@ exports.getAllDoctors = async (req, res) => {
 		res.status(500).json({ message: "Failed to retrieve doctors.", error });
 	}
 };
+
 exports.getDoctorById = async (req, res) => {
 	try {
 		const token = req.headers.authorization?.split(" ")[1];
@@ -305,64 +298,6 @@ exports.getDoctorById = async (req, res) => {
 			.json({ message: "Server error", error: error.message });
 	}
 };
-
-// exports.updateDoctorProfile = async (req, res) => {
-// 	try {
-// 		const token = req.headers.authorization?.split(" ")[1];
-// 		if (!token)
-// 			return res.status(401).send({ message: "Authorization token missing." });
-
-// 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
-// 		const userId = decoded.user_id;
-// 		console.log("Decoded JWT for profile update:", decoded);
-
-// 		const {
-// 			email,
-// 			first_name,
-// 			middle_name,
-// 			last_name,
-// 			contact_number,
-// 			valid_id,
-// 			field_id,
-// 		} = req.body;
-
-// 		// Update email if provided
-// 		if (email) {
-// 			await User.update({ email }, { where: { user_id: userId } });
-// 		}
-
-// 		// Update doctor profile
-// 		const [updateCount, updatedDoctor] = await Doctor.update(
-// 			{
-// 				first_name,
-// 				middle_name,
-// 				last_name,
-// 				contact_number,
-// 				valid_id,
-// 				field_id,
-// 			},
-// 			{ where: { user_id: userId }, returning: true }
-// 		);
-
-// 		if (updateCount === 0)
-// 			return res.status(404).send({ message: "Doctor profile not found." });
-
-// 		res.status(200).send({
-// 			message: "Profile updated successfully!",
-// 			data: updatedDoctor[0],
-// 		});
-// 	} catch (error) {
-// 		console.error("Error during profile update:", error);
-
-// 		if (error.name === "SequelizeUniqueConstraintError") {
-// 			return res.status(409).send({ message: "Email is already in use." });
-// 		}
-
-// 		res
-// 			.status(500)
-// 			.send({ message: "Failed to update profile.", error: error.message });
-// 	}
-// };
 
 exports.updateDoctorProfile = async (req, res) => {
 	const MAX_RETRIES = 3; // number of retry attempts

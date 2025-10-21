@@ -8,13 +8,11 @@ const jwt = require("jsonwebtoken");
 
 exports.getAllAppointments = async (req, res) => {
 	try {
-		// ✅ Extract token
 		const token = req.headers["authorization"]?.split(" ")[1];
 		if (!token) {
 			return res.status(401).json({ message: "No token provided" });
 		}
 
-		// ✅ Decode token
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 		const userId = decoded.user_id;
 
@@ -35,7 +33,7 @@ exports.getAllAppointments = async (req, res) => {
 				},
 				{
 					model: DoctorAvailability,
-					as: "availability", // ✅ use alias if defined in associations
+					as: "availability",
 					attributes: [
 						"availability_id",
 						"date",
@@ -61,7 +59,6 @@ exports.getAllAppointments = async (req, res) => {
 	}
 };
 
-// ✅ getDoctorAppointments
 exports.getDoctorAppointments = async (req, res) => {
 	try {
 		const token = req.headers["authorization"]?.split(" ")[1];
