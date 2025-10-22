@@ -11,5 +11,6 @@ router.post("/", upload.single("image"), eventController.createEvent);
 router.get("/", eventController.getAllEvents);
 router.get("/stats/:year", eventController.getMonthlyEvents);
 router.get("/upcoming", eventController.getUpcomingEventsThisMonth);
+router.delete("/:event_id", eventController.deleteEvent);
 
 module.exports = router;

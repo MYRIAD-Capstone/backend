@@ -5,40 +5,6 @@ const Notification = db.Notification; // ✅ Import notification model
 const User = db.User; // ✅ to notify all users
 const { Op, Sequelize } = require("sequelize");
 
-// exports.createEvent = async (req, res) => {
-// 	try {
-// 		const { title, date, time, description, location, status } = req.body;
-
-// 		console.log(title, date, time, description, location, status);
-// 		const image = req.file ? req.file.path : null;
-// 		console.log("Uploaded image filename:", req.file);
-// 		if (!title || !date || !time) {
-// 			return res
-// 				.status(400)
-// 				.json({ message: "Title, date, and time are required." });
-// 		}
-
-// 		const newEvent = await Event.create({
-// 			title,
-// 			date,
-// 			time,
-// 			description,
-// 			location,
-// 			status: status || "upcoming",
-// 			image,
-// 		});
-
-// 		res
-// 			.status(201)
-// 			.json({ message: "Event created successfully!", event: newEvent });
-// 	} catch (error) {
-// 		console.error("Error creating event:", error);
-// 		res.status(500).json({ message: "Internal server error." });
-// 	}
-// };
-
-// controllers/event.controller.js
-
 exports.createEvent = async (req, res) => {
 	try {
 		const { title, date, time, description, location, status } = req.body;
@@ -81,6 +47,41 @@ exports.createEvent = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error creating event:", error);
+		res.status(500).json({ message: "Internal server error." });
+	}
+};
+
+exports.deleteEvent = async (req, res) => {
+	try {
+		const { event_id } = req.params;
+
+		if (!event_id) {
+			return res.status(400).json({ message: "Event ID is required." });
+		}
+
+		// Find the event
+		const event = await Event.findByPk(event_id);
+
+		if (!event) {
+			return res.status(404).json({ message: "Event not found." });
+		}
+
+		// Delete related EventInterest records (optional)
+		await EventInterest.destroy({ where: { event_id } });
+
+		// Delete related Notifications (optional)
+		await Notification.destroy({
+			where: { related_id: event_id, type: "new_event" },
+		});
+
+		// Delete the event itself
+		await Event.destroy({ where: { event_id } });
+
+		res.status(200).json({
+			message: `Event "${event.title}" has been deleted successfully.`,
+		});
+	} catch (error) {
+		console.error("Error deleting event:", error);
 		res.status(500).json({ message: "Internal server error." });
 	}
 };
@@ -128,6 +129,7 @@ exports.getAllEvents = async (req, res) => {
 				});
 
 				return {
+					event_id: event.event_id,
 					title: event.title,
 					date: new Date(event.date).toLocaleDateString("en-US", {
 						month: "long",

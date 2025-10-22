@@ -59,6 +59,38 @@ exports.createArticle = async (req, res) => {
 	}
 };
 
+// ✅ Delete Article + Related Data
+exports.deleteArticle = async (req, res) => {
+  const { article_id } = req.params;
+
+  if (!article_id) {
+    return res.status(400).json({ message: "Article ID is required." });
+  }
+
+  try {
+    const article = await Article.findByPk(article_id);
+    if (!article) {
+      return res.status(404).json({ message: "Article not found." });
+    }
+
+    // Optional: delete related likes, comments, notifications
+    await Like.destroy({ where: { article_id } });
+    await Comment.destroy({ where: { article_id } });
+    await Notification.destroy({
+      where: { related_id: article_id, type: ["new_article", "like", "comment"] },
+    });
+
+    // Delete the article itself
+    await article.destroy();
+
+    return res.status(200).json({ message: "Article deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting article:", error);
+    return res.status(500).json({ message: "Failed to delete article.", error: error.message });
+  }
+};
+
+
 // ✅ Get all articles with counts (no change)
 exports.getAllArticlesWithCounts = async (req, res) => {
 	try {

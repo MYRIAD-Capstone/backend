@@ -129,6 +129,61 @@ exports.getDoctorAppointments = async (req, res) => {
 	}
 };
 
+exports.getAppointmentsByDoctorId = async (req, res) => {
+	try {
+		const doctorId = req.query.doctor_id; // fetch doctor_id from query
+		if (!doctorId)
+			return res.status(400).json({ message: "Please provide a doctor_id" });
+
+		// Validate doctor existence
+		const doctor = await db.Doctor.findByPk(doctorId);
+		if (!doctor) return res.status(404).json({ message: "Doctor not found" });
+
+		// Fetch appointments
+		const appointments = await db.Appointment.findAll({
+			where: { doctor_id: doctorId },
+			include: [
+				{
+					model: db.User,
+					as: "user",
+					attributes: ["user_id", "email"],
+					include: [
+						{
+							model: db.Client,
+							as: "clients",
+							attributes: [
+								"client_id",
+								"first_name",
+								"middle_name",
+								"last_name",
+								"contact_number",
+							],
+						},
+					],
+				},
+				{
+					model: db.DoctorAvailability,
+					as: "availability",
+					attributes: ["availability_id", "date", "start_time", "end_time"],
+				},
+			],
+			order: [
+				["date", "ASC"],
+				[
+					{ model: db.DoctorAvailability, as: "availability" },
+					"start_time",
+					"ASC",
+				],
+			],
+		});
+
+		res.status(200).json({ doctor, appointments });
+	} catch (error) {
+		console.error("Error fetching doctor appointments by ID:", error);
+		res.status(500).json({ message: "Something went wrong.", error });
+	}
+};
+
 // ✅ getClientAppointments
 exports.getClientAppointments = async (req, res) => {
 	try {

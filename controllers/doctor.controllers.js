@@ -214,6 +214,59 @@ exports.getDoctorDashboard = async (req, res) => {
 	}
 };
 
+// exports.getAllDoctors = async (req, res) => {
+// 	try {
+// 		const doctors = await Doctor.findAll({
+// 			include: [
+// 				{
+// 					model: Field,
+// 					as: "field",
+// 					attributes: ["field_id", "name"],
+// 				},
+// 				{
+// 					model: Appointment,
+// 					as: "appointments",
+// 					attributes: [
+// 						"appointment_id",
+// 						"user_id",
+// 						"date",
+// 						"time",
+// 						"status",
+// 						"remarks",
+// 					],
+// 				},
+// 			],
+// 			order: [["doctor_id", "ASC"]],
+// 		});
+
+// 		const formatted = doctors.map((doc) => ({
+// 			name: `Dr. ${doc.first_name} ${
+// 				doc.middle_name ? doc.middle_name + " " : ""
+// 			}${doc.last_name}`,
+// 			specialty: doc.field?.name || "General", // ✅ FIXED HERE TOO
+// 			status:
+// 				doc.status === "enabled"
+// 					? "Active"
+// 					: doc.status === "disabled"
+// 					? "Inactive"
+// 					: "Pending",
+// 			imageUrl: doc.valid_id
+// 				? `http://localhost:5000/uploads/${doc.valid_id}`
+// 				: "https://picsum.photos/seed/defaultdoctor/200",
+// 			appointments: doc.appointments.map((a) => ({
+// 				withWhom: `User ${a.user_id}`,
+// 				status: a.status,
+// 				dateTime: `${a.date}T${a.time}`,
+// 			})),
+// 		}));
+
+// 		res.status(200).json(formatted);
+// 	} catch (error) {
+// 		console.error("Error fetching doctors:", error);
+// 		res.status(500).json({ message: "Failed to retrieve doctors.", error });
+// 	}
+// };
+
 exports.getAllDoctors = async (req, res) => {
 	try {
 		const doctors = await Doctor.findAll({
@@ -221,18 +274,17 @@ exports.getAllDoctors = async (req, res) => {
 				{
 					model: Field,
 					as: "field",
-					attributes: ["field_id", "name"], // ✅ FIXED: use "name" not "field_name"
+					attributes: ["field_id", "name"],
 				},
 				{
-					model: Appointment,
-					as: "appointments",
+					model: DoctorAvailability,
+					as: "availabilities",
 					attributes: [
-						"appointment_id",
-						"user_id",
+						"availability_id",
 						"date",
-						"time",
+						"start_time",
+						"end_time",
 						"status",
-						"remarks",
 					],
 				},
 			],
@@ -240,10 +292,12 @@ exports.getAllDoctors = async (req, res) => {
 		});
 
 		const formatted = doctors.map((doc) => ({
+			user_id: doc.user_id,
+			doctor_id: doc.doctor_id,
 			name: `Dr. ${doc.first_name} ${
 				doc.middle_name ? doc.middle_name + " " : ""
 			}${doc.last_name}`,
-			specialty: doc.field?.name || "General", // ✅ FIXED HERE TOO
+			specialty: doc.field?.name || "General",
 			status:
 				doc.status === "enabled"
 					? "Active"
@@ -253,10 +307,11 @@ exports.getAllDoctors = async (req, res) => {
 			imageUrl: doc.valid_id
 				? `http://localhost:5000/uploads/${doc.valid_id}`
 				: "https://picsum.photos/seed/defaultdoctor/200",
-			appointments: doc.appointments.map((a) => ({
-				withWhom: `User ${a.user_id}`,
+			availability: doc.availabilities.map((a) => ({
+				date: a.date,
+				startTime: a.start_time,
+				endTime: a.end_time,
 				status: a.status,
-				dateTime: `${a.date}T${a.time}`,
 			})),
 		}));
 

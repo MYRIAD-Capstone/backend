@@ -10,5 +10,6 @@ router.get("/:id", articleController.getArticleById); // Dynamic route last
 router.post("/like", articleController.toggleLike);
 router.post("/comment", articleController.createComment);
 router.delete("/comment/:comment_id", articleController.deleteComment);
+router.delete("/:article_id", articleController.deleteArticle);
 
 module.exports = router;
