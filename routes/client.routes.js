@@ -6,5 +6,6 @@ const controller = require("../controllers/client.controllers.js");
 
 router.get("/all", controller.getAllClients);
 router.put("/profile", controller.updateProfile);
+router.get("/dashboard", controller.getClientDashboard);
 
 module.exports = router;

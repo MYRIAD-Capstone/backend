@@ -12,5 +12,5 @@ router.get("/", eventController.getAllEvents);
 router.get("/stats/:year", eventController.getMonthlyEvents);
 router.get("/upcoming", eventController.getUpcomingEventsThisMonth);
 router.delete("/:event_id", eventController.deleteEvent);
-
+router.get("/stats-2", eventController.getEventStats);
 module.exports = router;

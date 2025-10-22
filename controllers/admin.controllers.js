@@ -38,3 +38,24 @@ exports.updateAdminProfile = async (req, res) => {
 		res.status(500).json({ message: "Server error" });
 	}
 };
+
+exports.getAdminProfile = async (req, res) => {
+	try {
+		const token = req.headers.authorization?.split(" ")[1]; // Expect "Bearer <token>"
+
+		if (!token) {
+			return res.status(401).json({ message: "Authorization token missing." });
+		}
+
+		const admin = await Admin.findOne();
+
+		if (!admin) {
+			return res.status(404).json({ message: "Admin profile not found." });
+		}
+
+		res.json({ admin });
+	} catch (err) {
+		console.error("Error fetching admin profile:", err);
+		res.status(500).json({ message: "Server error" });
+	}
+};
