@@ -153,6 +153,24 @@ exports.getAllEvents = async (req, res) => {
 	}
 };
 
+exports.getEventStats = async (req, res) => {
+	try {
+		const total = await Event.count();
+		const upcoming = await Event.count({ where: { status: "upcoming" } });
+		const completed = await Event.count({ where: { status: "completed" } });
+		const cancelled = await Event.count({ where: { status: "cancelled" } });
+
+		res.status(200).json({
+			total,
+			upcoming,
+			completed,
+			cancelled,
+		});
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+};
+
 exports.getMonthlyEvents = async (req, res) => {
 	try {
 		const { year } = req.params; // ✅ use query param for consistency (?year=2025)

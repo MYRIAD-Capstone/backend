@@ -12,6 +12,24 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 require("dotenv").config();
 
+exports.getDoctorStats = async (req, res) => {
+	try {
+		const total = await Doctor.count();
+		const active = await Doctor.count({ where: { status: "enabled" } });
+		const pending = await Doctor.count({ where: { status: "pending" } });
+		const disabled = await Doctor.count({ where: { status: "disabled" } });
+
+		res.status(200).json({
+			total,
+			active,
+			pending,
+			disabled,
+		});
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+};
+
 exports.getAvailableTimeByDoctor = async (req, res) => {
 	try {
 		const { doctor_id, date } = req.query;
@@ -266,6 +284,60 @@ exports.getDoctorDashboard = async (req, res) => {
 // 		res.status(500).json({ message: "Failed to retrieve doctors.", error });
 // 	}
 // };
+
+exports.getDoctorAppointments = async (req, res) => {
+	try {
+		// 🔐 1️⃣ Extract and verify token
+		const token = req.headers.authorization?.split(" ")[1];
+		if (!token)
+			return res.status(401).json({ message: "Authorization token missing." });
+
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+		// 🩺 2️⃣ Get doctor from user_id
+		const doctor = await Doctor.findOne({
+			where: { user_id: decoded.user_id },
+		});
+		if (!doctor)
+			return res.status(404).json({ message: "Doctor profile not found." });
+
+		const doctor_id = doctor.doctor_id;
+
+		// 📅 3️⃣ Fetch all appointments for this doctor
+		const appointments = await Appointment.findAll({
+			where: { doctor_id },
+			include: [
+				{
+					model: User,
+					as: "patient",
+					attributes: ["user_id", "first_name", "last_name", "email"],
+				},
+				{
+					model: DoctorAvailability,
+					as: "availability",
+					attributes: ["date", "start_time", "end_time", "status"],
+				},
+			],
+			order: [["createdAt", "DESC"]],
+		});
+
+		// 🚫 4️⃣ Handle empty result
+		if (!appointments.length) {
+			return res
+				.status(404)
+				.json({ message: "No appointments found for this doctor." });
+		}
+
+		// ✅ 5️⃣ Return result
+		return res.status(200).json({ appointments });
+	} catch (error) {
+		console.error("Error fetching doctor appointments:", error);
+		return res.status(500).json({
+			message: "Server error while fetching appointments.",
+			error: error.message,
+		});
+	}
+};
 
 exports.getAllDoctors = async (req, res) => {
 	try {

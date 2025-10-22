@@ -7,6 +7,22 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const { Op } = require("sequelize");
 
+exports.getMessageStats = async (req, res) => {
+	try {
+		const total = await Message.count();
+		const unread = await Message.count({ where: { read: false } });
+		const delivered = await Message.count({ where: { delivered: true } });
+
+		res.status(200).json({
+			total,
+			unread,
+			delivered,
+		});
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+};
+
 exports.sendMessageClient = async (req, res) => {
 	try {
 		const { sender_id, receiver_id, type, content } = req.body;
