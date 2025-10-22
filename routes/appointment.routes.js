@@ -12,5 +12,6 @@ router.put("/:id/cancel", appointmentController.cancelAppointment);
 router.put("/:id/ongoing", appointmentController.ongoingAppointment);
 router.put("/:id/complete", appointmentController.completeAppointment);
 router.get("/by-doctor", appointmentController.getAppointmentsByDoctorId);
+router.get("/stats", appointmentController.getDoctorAppointments);
 
 module.exports = router;
