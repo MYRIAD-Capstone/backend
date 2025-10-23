@@ -389,6 +389,10 @@ exports.completeAppointment = async (req, res) => {
 
 exports.createAppointment = async (req, res) => {
 	try {
+		const token = req.headers["authorization"]?.split(" ")[1];
+		if (!token) return res.status(401).json({ message: "No token provided" });
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const userId = decoded.user_id;
 		const { doctor_id, user_id, date, timeSlot, remarks, availability_id } =
 			req.body;
 
@@ -400,7 +404,7 @@ exports.createAppointment = async (req, res) => {
 		// const startTime = timeSlot.split(" - ")[0];
 		const appointment = await Appointment.create({
 			doctor_id,
-			user_id,
+			user_id: userId,
 			date,
 			// time: startTime,
 			remarks,
