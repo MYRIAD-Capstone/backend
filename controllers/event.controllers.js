@@ -4,7 +4,7 @@ const EventInterest = db.EventInterest;
 const Notification = db.Notification; // ✅ Import notification model
 const User = db.User; // ✅ to notify all users
 const { Op, Sequelize } = require("sequelize");
-const sequelize = db.sequelize;
+
 exports.createEvent = async (req, res) => {
 	try {
 		const { title, date, time, description, location, status } = req.body;
@@ -153,28 +153,6 @@ exports.getAllEvents = async (req, res) => {
 	}
 };
 
-exports.updatePastEvents = async (req, res) => {
-	try {
-		const [result] = await sequelize.query(`
-			UPDATE events
-			SET status = 'completed'
-			WHERE date < CURDATE()
-			  AND status = 'upcoming';
-		`);
-
-		res.status(200).json({
-			message: "Past events updated successfully.",
-			affectedRows: result.affectedRows || 0,
-		});
-	} catch (error) {
-		console.error("Error updating past events:", error);
-		res.status(500).json({
-			message: "Failed to update past events.",
-			error: error.message,
-		});
-	}
-};
-
 exports.getEventStats = async (req, res) => {
 	try {
 		const total = await Event.count();
@@ -234,6 +212,7 @@ exports.getMonthlyEvents = async (req, res) => {
 	}
 };
 
+// 🗓️ Get Upcoming Events for the Current Month
 exports.getUpcomingEventsThisMonth = async (req, res) => {
 	try {
 		const today = new Date();
@@ -286,6 +265,7 @@ exports.getUpcomingEventsThisMonth = async (req, res) => {
 	}
 };
 
+// Helper to capitalize first letter
 function capitalize(str) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }

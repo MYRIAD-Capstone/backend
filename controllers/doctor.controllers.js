@@ -8,8 +8,6 @@ const Article = db.Article;
 const Event = db.Event;
 const Message = db.Message;
 const User = db.User;
-const Client = db.Client;
-const Admin = db.Admin;
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 require("dotenv").config();
@@ -155,98 +153,6 @@ exports.getAvailabilitiesByDoctor = async (req, res) => {
 	}
 };
 
-// exports.getDoctorDashboard = async (req, res) => {
-// 	try {
-// 		const token = req.headers.authorization?.split(" ")[1];
-// 		if (!token)
-// 			return res.status(401).json({ message: "Authorization token missing." });
-
-// 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-// 		const isDoctor = await bcrypt.compare("doctor", decoded.role);
-
-// 		if (!isDoctor) {
-// 			return res.status(403).json({ message: "Access denied. Not a doctor." });
-// 		}
-
-// 		const doctorId = await Doctor.findOne({
-// 			where: { user_id: decoded.user_id },
-// 		}).then((doc) => doc.doctor_id);
-
-// 		const today = new Date();
-// 		const formattedDate = today.toISOString().split("T")[0];
-
-// 		const [appointments, announcements, events, recentMessage, availabilities] =
-// 			await Promise.all([
-// 				Appointment.findAll({
-// 					where: { doctor_id: doctorId, status: "Pending" },
-// 					include: [
-// 						{
-// 							model: User,
-// 							as: "user",
-// 							attributes: ["user_id", "email"],
-// 							include: [
-// 								{
-// 									model: Client,
-// 									as: "clients", // <-- must match your association alias
-// 									attributes: ["first_name", "last_name"],
-// 								},
-// 							],
-// 						},
-// 						{
-// 							model: DoctorAvailability,
-// 							as: "availability",
-// 							attributes: ["start_time", "end_time"],
-// 						},
-// 					],
-// 					order: [
-// 						["date", "ASC"],
-// 						[
-// 							{ model: DoctorAvailability, as: "availability" },
-// 							"start_time",
-// 							"ASC",
-// 						],
-// 					],
-// 					limit: 5,
-// 				}),
-
-// 				Article.findAll({
-// 					where: { status: "published" },
-// 					order: [["createdAt", "DESC"]],
-// 					limit: 3,
-// 				}),
-// 				Event.findAll({
-// 					order: [["date", "ASC"]],
-// 					limit: 5,
-// 				}),
-// 				Message.findOne({
-// 					where: { receiver_id: decoded.user_id },
-// 					include: [{ model: User, as: "sender" }],
-// 					order: [["createdAt", "DESC"]],
-// 				}),
-// 				DoctorAvailability.findAll({
-// 					where: { doctor_id: doctorId, date: formattedDate },
-// 					order: [["start_time", "ASC"]],
-// 				}),
-// 			]);
-
-// 		return res.status(200).json({
-// 			message: "Doctor dashboard fetched successfully",
-// 			appointments,
-// 			announcements,
-// 			events,
-// 			recentMessage: recentMessage || {},
-// 			availabilities,
-// 		});
-// 	} catch (error) {
-// 		console.error("Error fetching doctor dashboard:", error);
-// 		return res.status(500).json({
-// 			message: "Failed to fetch doctor dashboard.",
-// 			error: error.message,
-// 		});
-// 	}
-// };
-
 exports.getDoctorDashboard = async (req, res) => {
 	try {
 		const token = req.headers.authorization?.split(" ")[1];
@@ -255,35 +161,23 @@ exports.getDoctorDashboard = async (req, res) => {
 
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-		const doctor = await Doctor.findOne({
-			where: { user_id: decoded.user_id },
-		});
-		if (!doctor) {
+		const isDoctor = await bcrypt.compare("doctor", decoded.role);
+
+		if (!isDoctor) {
 			return res.status(403).json({ message: "Access denied. Not a doctor." });
 		}
-		const doctorId = doctor.doctor_id;
+
+		const doctorId = decoded.user_id;
 
 		const today = new Date();
 		const formattedDate = today.toISOString().split("T")[0];
 
-		// Fetch everything in parallel
 		const [appointments, announcements, events, recentMessage, availabilities] =
 			await Promise.all([
 				Appointment.findAll({
 					where: { doctor_id: doctorId, status: "Pending" },
 					include: [
-						{
-							model: User,
-							as: "user",
-							attributes: ["user_id", "email", "role"],
-							include: [
-								{
-									model: Client,
-									as: "clients",
-									attributes: ["first_name", "last_name"],
-								},
-							],
-						},
+						{ model: User, as: "user" },
 						{
 							model: DoctorAvailability,
 							as: "availability",
@@ -300,68 +194,21 @@ exports.getDoctorDashboard = async (req, res) => {
 					],
 					limit: 5,
 				}),
-
 				Article.findAll({
 					where: { status: "published" },
 					order: [["createdAt", "DESC"]],
 					limit: 3,
 				}),
-
 				Event.findAll({
+					where: { status: "upcoming" },
 					order: [["date", "ASC"]],
 					limit: 5,
 				}),
-
-				// Fetch latest message and include personal info based on role
-				(async () => {
-					const msg = await Message.findOne({
-						where: { receiver_id: decoded.user_id },
-						include: [
-							{
-								model: User,
-								as: "receiver",
-								attributes: ["user_id", "email", "role"],
-							},
-							{
-								model: User,
-								as: "sender",
-								attributes: ["user_id", "email", "role"],
-							},
-						],
-						order: [["createdAt", "DESC"]],
-					});
-
-					if (!msg) return null;
-
-					// Add personal info dynamically based on sender role
-					const sender = msg.sender;
-					let personalInfo = null;
-
-					switch (sender.role) {
-						case "client":
-							personalInfo = await Client.findOne({
-								where: { user_id: sender.user_id },
-								attributes: ["first_name", "last_name"],
-							});
-							break;
-						case "admin":
-							personalInfo = await Admin.findOne({
-								where: { user_id: sender.user_id },
-								attributes: ["first_name", "last_name"],
-							});
-							break;
-						case "doctor":
-							personalInfo = await Doctor.findOne({
-								where: { user_id: sender.user_id },
-								attributes: ["first_name", "last_name", "specialty"],
-							});
-							break;
-					}
-
-					msg.sender.personalInfo = personalInfo;
-					return msg;
-				})(),
-
+				Message.findOne({
+					where: { receiver_id: doctorId },
+					include: [{ model: User, as: "sender" }],
+					order: [["createdAt", "DESC"]],
+				}),
 				DoctorAvailability.findAll({
 					where: { doctor_id: doctorId, date: formattedDate },
 					order: [["start_time", "ASC"]],
@@ -384,6 +231,59 @@ exports.getDoctorDashboard = async (req, res) => {
 		});
 	}
 };
+
+// exports.getAllDoctors = async (req, res) => {
+// 	try {
+// 		const doctors = await Doctor.findAll({
+// 			include: [
+// 				{
+// 					model: Field,
+// 					as: "field",
+// 					attributes: ["field_id", "name"],
+// 				},
+// 				{
+// 					model: Appointment,
+// 					as: "appointments",
+// 					attributes: [
+// 						"appointment_id",
+// 						"user_id",
+// 						"date",
+// 						"time",
+// 						"status",
+// 						"remarks",
+// 					],
+// 				},
+// 			],
+// 			order: [["doctor_id", "ASC"]],
+// 		});
+
+// 		const formatted = doctors.map((doc) => ({
+// 			name: `Dr. ${doc.first_name} ${
+// 				doc.middle_name ? doc.middle_name + " " : ""
+// 			}${doc.last_name}`,
+// 			specialty: doc.field?.name || "General", // ✅ FIXED HERE TOO
+// 			status:
+// 				doc.status === "enabled"
+// 					? "Active"
+// 					: doc.status === "disabled"
+// 					? "Inactive"
+// 					: "Pending",
+// 			imageUrl: doc.valid_id
+// 				? `http://localhost:5000/uploads/${doc.valid_id}`
+// 				: "https://picsum.photos/seed/defaultdoctor/200",
+// 			appointments: doc.appointments.map((a) => ({
+// 				withWhom: `User ${a.user_id}`,
+// 				status: a.status,
+// 				dateTime: `${a.date}T${a.time}`,
+// 			})),
+// 		}));
+
+// 		res.status(200).json(formatted);
+// 	} catch (error) {
+// 		console.error("Error fetching doctors:", error);
+// 		res.status(500).json({ message: "Failed to retrieve doctors.", error });
+// 	}
+// };
 
 exports.getDoctorAppointments = async (req, res) => {
 	try {
@@ -444,11 +344,6 @@ exports.getAllDoctors = async (req, res) => {
 		const doctors = await Doctor.findAll({
 			include: [
 				{
-					model: User,
-					as: "user",
-					attributes: ["user_id", "email", "status", "role", "profile_picture"],
-				},
-				{
 					model: Field,
 					as: "field",
 					attributes: ["field_id", "name"],
@@ -481,7 +376,9 @@ exports.getAllDoctors = async (req, res) => {
 					: doc.status === "disabled"
 					? "Inactive"
 					: "Pending",
-			imageUrl: doc.user.profile_picture,
+			imageUrl: doc.valid_id
+				? `http://localhost:5000/uploads/${doc.valid_id}`
+				: "https://picsum.photos/seed/defaultdoctor/200",
 			availability: doc.availabilities.map((a) => ({
 				date: a.date,
 				startTime: a.start_time,
@@ -606,65 +503,5 @@ exports.updateDoctorProfile = async (req, res) => {
 				.status(500)
 				.send({ message: "Failed to update profile.", error: error.message });
 		}
-	}
-};
-
-exports.setUnavailable = async (req, res) => {
-	try {
-		const { availability_id } = req.params;
-
-		const availability = await DoctorAvailability.findByPk(availability_id);
-
-		if (!availability) {
-			return res.status(404).json({ message: "Availability not found" });
-		}
-
-		availability.status = "unavailable";
-		await availability.save();
-
-		res.status(200).json({
-			message: "Doctor availability set to unavailable",
-			availability,
-		});
-	} catch (error) {
-		console.error("Error updating doctor availability:", error);
-		res.status(500).json({
-			message: "Failed to update availability",
-			error: error.message,
-		});
-	}
-};
-
-exports.deleteAvailability = async (req, res) => {
-	try {
-		const { availability_id } = req.params;
-
-		const availability = await DoctorAvailability.findByPk(availability_id);
-		if (!availability) {
-			return res.status(404).json({ message: "Availability not found" });
-		}
-
-		// Check if any appointment exists for this availability
-		const existingAppointment = await Appointment.findOne({
-			where: { availability_id },
-		});
-
-		if (existingAppointment) {
-			return res.status(400).json({
-				message:
-					"Cannot delete availability because there are appointments scheduled.",
-			});
-		}
-
-		// Safe to delete
-		await availability.destroy();
-
-		res.status(200).json({ message: "Availability deleted successfully" });
-	} catch (error) {
-		console.error("Error deleting availability:", error);
-		res.status(500).json({
-			message: "Failed to delete availability",
-			error: error.message,
-		});
 	}
 };
